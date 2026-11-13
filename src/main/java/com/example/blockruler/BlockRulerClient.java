@@ -3,13 +3,13 @@ package com.example.blockruler;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.VertexRendering;
@@ -44,7 +44,7 @@ public class BlockRulerClient implements ClientModInitializer {
                 new KeyBinding("key.blockruler.clear", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_C, cat));
 
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        WorldRenderEvents.AFTER_TRANSLUCENT.register(this::render);
+        WorldRenderEvents.AFTER_ENTITIES.register(this::render);
     }
 
     private void tick(MinecraftClient mc) {
@@ -92,13 +92,14 @@ public class BlockRulerClient implements ClientModInitializer {
         List<BlockPos> blocks = line();
         if (blocks.isEmpty()) return;
 
-        MatrixStack matrices = ctx.matrixStack();
+        MatrixStack matrices = ctx.matrices();
         VertexConsumerProvider consumers = ctx.consumers();
         if (matrices == null || consumers == null) return;
 
-        Vec3d cam = ctx.camera().getPos();
+        net.minecraft.client.render.Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        Vec3d cam = camera.getCameraPos();
         TextRenderer tr = MinecraftClient.getInstance().textRenderer;
-        VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
+        VertexConsumer lines = consumers.getBuffer(RenderLayers.lines());
 
         for (int i = 0; i < blocks.size(); i++) {
             BlockPos p = blocks.get(i);
@@ -106,14 +107,14 @@ public class BlockRulerClient implements ClientModInitializer {
 
             // highlight box (endpoints green, middle blocks yellow)
             Box box = new Box(p).expand(0.002).offset(-cam.x, -cam.y, -cam.z);
-            if (end) VertexRendering.drawBox(matrices, lines, box, 0.2f, 1f, 0.2f, 1f);
-            else     VertexRendering.drawBox(matrices, lines, box, 1f, 0.9f, 0.1f, 1f);
+            if (end) VertexRendering.drawBox(matrices.peek(), lines, box, 0.2f, 1f, 0.2f, 1f);
+            else     VertexRendering.drawBox(matrices.peek(), lines, box, 1f, 0.9f, 0.1f, 1f);
 
             // number label, billboarded toward the camera, visible through blocks
             String label = String.valueOf(i + START_AT);
             matrices.push();
             matrices.translate(p.getX() + 0.5 - cam.x, p.getY() + 0.5 - cam.y, p.getZ() + 0.5 - cam.z);
-            matrices.multiply(ctx.camera().getRotation());
+            matrices.multiply(camera.getRotation());
             matrices.scale(-0.04f, -0.04f, 0.04f);
             tr.draw(label, -tr.getWidth(label) / 2f, -4f, 0xFFFFFFFF, true,
                     matrices.peek().getPositionMatrix(), consumers,
